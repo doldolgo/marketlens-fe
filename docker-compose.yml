@@ -1,0 +1,8 @@
+services:
+  fe:
+    build: .
+    container_name: market-lens-fe
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    
