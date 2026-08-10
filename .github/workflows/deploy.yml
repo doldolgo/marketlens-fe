@@ -15,6 +15,6 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/MarketLens-fe
+            cd ~/marketlens-fe
             git pull origin main
             docker compose up -d --build
