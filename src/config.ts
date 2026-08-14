@@ -5,6 +5,10 @@ export const STALE_SECONDS = 30;        // 이 초 이상 미수신이면 stale 
 export const LIVE_UPDATES = true;       // false면 1.5초 tick 시뮬레이션 중지
 export const COLOR_CONVENTION: '한국식' | '국제식' = '한국식';
 
+// 백엔드 API — 개발은 로컬 uvicorn 기본값, 배포 빌드는 VITE_API_BASE 로 주입
+export const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+export const SPREADS_POLL_MS = 5000;    // GET /spreads 폴링 주기 (ms)
+
 // 상승/하락 색 — 한국식: 빨강=상승, 파랑=하락
 const kr = COLOR_CONVENTION === '한국식';
 export const POS = kr ? '#e0697d' : '#5fbf8f';

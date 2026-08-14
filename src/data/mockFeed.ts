@@ -10,6 +10,7 @@ import type {
 export class MockFeed {
   rate = 1392.4;          // USDT/KRW 암묵환율
   rateOfficial = 1383.6;  // 고시환율
+  liveSpreads = false;    // true = spreads/rate 가 백엔드 실데이터 (tick 시뮬레이션 제외)
   spreads: SpreadRow[] = [];
   io: Record<string, IoInfo> = {};
   gapd: GapCoin[] = [];
@@ -116,18 +117,31 @@ export class MockFeed {
     this.flow = rows;
   }
 
+  // GET /spreads 폴링 성공 시 호출 — 이후 spreads/rate 는 백엔드가 진실
+  applySpreads(rows: SpreadRow[], rate: number) {
+    this.spreads = rows;
+    this.rate = rate;
+    this.liveSpreads = true;
+  }
+
   // 1.5초마다 호출 — 실시간 수신을 흉내내 일부 값만 랜덤 갱신
   tick() {
-    this.rate += (Math.random() - 0.5) * 0.4;
-    for (const r of this.spreads) {
-      if (r.status === 'fail') continue;
-      if (r.status !== 'stale' && Math.random() < 0.25) {
-        r.fwd = Math.round((r.fwd + (Math.random() - 0.5) * 0.12) * 100) / 100;
-        r.rev = Math.round((-r.fwd - 0.35 + (Math.random() - 0.5) * 0.2) * 100) / 100;
-        r.usd *= 1 + (Math.random() - 0.5) * 0.001;
-        r.age = 0;
-        if (Math.random() < 0.4) { r.spark.push(r.spark[r.spark.length - 1] + (Math.random() - 0.5) * 0.05); r.spark.shift(); }
-      } else r.age += 1.5;
+    if (this.liveSpreads) {
+      // 실데이터 모드 — 값은 폴링이 갱신하고 여기선 경과시간만 쌓는다.
+      // 백엔드가 죽으면 age 가 계속 자라 STALE_SECONDS 를 넘겨 stale 로 드러난다.
+      for (const r of this.spreads) r.age += 1.5;
+    } else {
+      this.rate += (Math.random() - 0.5) * 0.4;
+      for (const r of this.spreads) {
+        if (r.status === 'fail') continue;
+        if (r.status !== 'stale' && Math.random() < 0.25) {
+          r.fwd = Math.round((r.fwd + (Math.random() - 0.5) * 0.12) * 100) / 100;
+          r.rev = Math.round((-r.fwd - 0.35 + (Math.random() - 0.5) * 0.2) * 100) / 100;
+          r.usd *= 1 + (Math.random() - 0.5) * 0.001;
+          r.age = 0;
+          if (Math.random() < 0.4) { r.spark.push(r.spark[r.spark.length - 1] + (Math.random() - 0.5) * 0.05); r.spark.shift(); }
+        } else r.age += 1.5;
+      }
     }
     for (const g of this.gapd) for (const x of [...g.spots, ...g.perps]) {
       if (x.status === 'fail') continue;
