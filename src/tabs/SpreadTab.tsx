@@ -174,6 +174,16 @@ export default function SpreadTab({ feed, onPivot }: { feed: MockFeed; onPivot: 
               </button>
             ))}
           </div>
+          {!feed.spreads.length && (
+            <div style={{ padding: 'var(--space-8) var(--space-6)', textAlign: 'center', color: 'var(--color-neutral-600)', fontSize: 13 }}>
+              백엔드에서 스프레드를 받는 중입니다…
+            </div>
+          )}
+          {!!feed.spreads.length && !list.length && (
+            <div style={{ padding: 'var(--space-8) var(--space-6)', textAlign: 'center', color: 'var(--color-neutral-600)', fontSize: 13 }}>
+              조건에 맞는 코인이 없습니다. 필터를 넓혀 보세요.
+            </div>
+          )}
           {list.map(c => {
             const fail = c.failAll, stale = c.staleAll;
             const best = view === 'kimp' ? c.bestF : c.bestR;
