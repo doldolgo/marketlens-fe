@@ -7,7 +7,7 @@ import { fmtKRW, fmtPct } from '../lib/format';
 import { Seg, segOpt, NumField, ToggleBtn } from '../components/ui';
 
 const FXS = ['Binance', 'Bybit', 'Bitget', 'MEXC', 'Gate.io', 'Hyperliquid'];
-const GRID = '112px 1fr 264px 208px';
+const GRID = '112px 1fr 264px 148px 88px';
 
 // 슬리피지 반영 시 페어에 붙는 추가 필드
 type CalcRow = SpreadRow & { slip?: number; fwdRaw?: number };
@@ -102,6 +102,9 @@ export default function SpreadTab({ feed, onPivot }: { feed: MockFeed; onPivot: 
     // 가능(2) > 확인 불가(1) > 중단(0) — 세 상태를 정렬에서도 구분한다
     const ioRank = (c: Agg) => (ioOk(c) ? 2 : ioUnknown(c) ? 1 : 0);
     if (key === 'io') { va = ioRank(a); vb = ioRank(b); }
+    // 네트워크는 문자열 정렬. 미확인('–')은 코드포인트가 알파벳보다 커서
+    // 오름차순에서 자연히 뒤로 밀린다.
+    if (key === 'net') { va = ioLegs(a)?.net ?? '–'; vb = ioLegs(b)?.net ?? '–'; }
     if (va == null || vb == null) return va == null ? 1 : -1;
     if (typeof va === 'string') return va < (vb as string) ? -sortDir : va > (vb as string) ? sortDir : 0;
     return ((va as number) - (vb as number)) * sortDir;
@@ -110,10 +113,11 @@ export default function SpreadTab({ feed, onPivot }: { feed: MockFeed; onPivot: 
   const headers: [string, string, 'left' | 'right'][] = [
     ['sym', '심볼', 'left'], ['krw', '국내가 KRW', 'right'],
     ['fwd', view === 'kimp' ? '김프' : '역프', 'right'], ['io', '입출금', 'right'],
+    ['net', '네트워크', 'right'],
   ];
   const onSort = (k: string) => {
     if (k === sortKey) setSortDir(-sortDir);
-    else { setSortKey(k); setSortDir(k === 'sym' ? 1 : -1); }
+    else { setSortKey(k); setSortDir(k === 'sym' || k === 'net' ? 1 : -1); }
   };
 
   const fxAllOn = FXS.every(fx => !fxOff[fx]);
@@ -183,7 +187,7 @@ export default function SpreadTab({ feed, onPivot }: { feed: MockFeed; onPivot: 
 
       {/* 테이블 */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', padding: '0 var(--space-6)' }}>
-        <div style={{ minWidth: 780, maxWidth: 1080, flex: 1, overflow: 'auto', borderLeft: '1px solid var(--color-divider)', borderRight: '1px solid var(--color-divider)' }}>
+        <div style={{ minWidth: 820, maxWidth: 1080, flex: 1, overflow: 'auto', borderLeft: '1px solid var(--color-divider)', borderRight: '1px solid var(--color-divider)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: GRID, position: 'sticky', top: 0, zIndex: 2, background: 'var(--color-bg)', borderBottom: '1px solid var(--color-neutral-800)', padding: '0 var(--space-6)' }}>
             {headers.map(([k, label, align]) => (
               <button key={k} onClick={() => onSort(k)} className="hv-txt"
@@ -242,7 +246,9 @@ export default function SpreadTab({ feed, onPivot }: { feed: MockFeed; onPivot: 
                 <div style={{ padding: '0 8px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 5 }}>
                   <span style={tagStyle(leg ? leg.wd : null)}>{leg ? ioLabel('출금', leg.wd) : '출금 ?'}</span>
                   <span style={tagStyle(leg ? leg.dep : null)}>{leg ? ioLabel('입금', leg.dep) : '입금 ?'}</span>
-                  <span style={{ fontSize: 10, color: 'var(--color-neutral-500)', whiteSpace: 'nowrap' }}>{leg ? leg.net : '–'}</span>
+                </div>
+                <div style={{ padding: '0 8px', textAlign: 'right', fontSize: 11, color: 'var(--color-neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {leg ? leg.net : '–'}
                 </div>
               </div>
             );
