@@ -16,6 +16,9 @@ export interface SpreadRow {
   age: number;          // 마지막 수신 후 경과 초
   liqDom: number;       // 국내 호가 유동성 (USD 환산) — 슬리피지 추정용
   liqFx: number;
+  // 이 페어를 실제로 옮길 때 쓰는 네트워크 (국내 거래소 기준).
+  // 아래 입출금 4개는 **이 망에서의** 상태다. null이면 망을 확인 못 한 것.
+  netDom: string | null;
   // 입출금 가능 여부 — 3-state (아래 IoState 참고). 국내(Dom)·해외(Fx) 양쪽.
   depDom: IoState;
   wdDom: IoState;

@@ -97,12 +97,14 @@ export class MockFeed {
     // 한 행은 (국내 × 해외) 페어라 입출금이 양쪽 것 다 실려 온다 — 거래소별로
     // 풀어 담는다. 같은 코인의 같은 거래소는 어느 행에서 오든 같은 값이다.
     //
-    // 네트워크명(net)은 백엔드가 주지 않는다. 지어내지 않고 '–' 로 둔다 —
-    // 없는 값을 그럴듯하게 채우는 것이 애초에 이 화면을 틀리게 만든 원인이다.
+    // 네트워크는 양쪽 다리가 같은 값을 쓴다 — 옮기는 데 쓰는 그 망 하나이고,
+    // 국내 거래소가 지원하는 망이 기준이다. 백엔드가 못 정하면 null 로 오고,
+    // 그때는 지어내지 않고 '–' 로 둔다.
     const io: Record<string, IoInfo> = {};
     for (const r of rows) {
-      io[r.sym + '|' + r.dom] = { dep: r.depDom, wd: r.wdDom, net: '–' };
-      io[r.sym + '|' + r.fx] = { dep: r.depFx, wd: r.wdFx, net: '–' };
+      const net = r.netDom ?? '–';
+      io[r.sym + '|' + r.dom] = { dep: r.depDom, wd: r.wdDom, net };
+      io[r.sym + '|' + r.fx] = { dep: r.depFx, wd: r.wdFx, net };
     }
     this.io = io;
   }
