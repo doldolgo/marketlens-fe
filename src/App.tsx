@@ -39,7 +39,6 @@ export default function App() {
   const btcRev = btcLive.length ? Math.max(...btcLive.map(r => r.rev)) : 0;
   // rate 0 = 백엔드 첫 폴링 전. 숫자를 지어내지 않고 '–' 로 둔다.
   const hasRate = feed.rate > 0;
-  const rateVs = hasRate ? (feed.rate / feed.rateOfficial - 1) * 100 : 0;
   const coinCount = new Set(feed.spreads.map(r => r.sym)).size;
 
   // 탭 전환 시 각 탭의 필터 상태를 유지하려고 언마운트 대신 display로 숨긴다
@@ -84,7 +83,6 @@ export default function App() {
             <span style={{ fontSize: 18, fontVariantNumeric: 'tabular-nums' }}>
               {hasRate ? '₩' + feed.rate.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '–'}
             </span>
-            {hasRate && <span style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums', color: pctColor(rateVs) }}>고시 대비 {fmtPct(rateVs)}</span>}
           </div>
         </div>
         {vDivider}

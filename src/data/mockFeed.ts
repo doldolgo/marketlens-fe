@@ -11,7 +11,6 @@ import type {
 export class MockFeed {
   // 환율·스프레드는 백엔드 GET /spreads 가 유일한 출처다. 첫 폴링 전에는 비어 있다.
   rate = 0;               // USDT/KRW 암묵환율 (0 = 아직 못 받음)
-  rateOfficial = 1383.6;  // ⚠️ 고시환율 — 아직 mock (백엔드 미연동)
   spreads: SpreadRow[] = [];
   io: Record<string, IoInfo> = {};
   gapd: GapCoin[] = [];
