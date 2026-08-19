@@ -27,24 +27,13 @@ export class MockFeed {
 
   private buildData() {
     // 스프레드는 mock 을 만들지 않는다 — 백엔드 GET /spreads 폴링이 유일한 출처다.
-    // (아래 coins / doms / fxs 는 아직 mock 인 다른 탭에서 쓴다)
+    // (아래 coins / fxs 는 아직 mock 인 다른 탭에서 쓴다)
     const coins: [string, number][] = [['BTC',118420],['ETH',4123],['XRP',2.91],['SOL',182.4],['DOGE',0.2134],['ADA',0.887],['TRX',0.302],['LINK',24.6],['AVAX',41.2],['DOT',8.42],['SUI',4.05],['APT',10.8],['ARB',1.12],['OP',2.31],['SEI',0.512],['ATOM',9.14],['NEAR',6.72],['HBAR',0.246],['ETC',31.5],['STX',2.04],['ONDO',1.42],['PEPE',0.0000162],['WLD',3.86],['TIA',6.18]];
-    const doms = ['업비트', '빗썸'];
     const fxs = ['Binance', 'Bybit', 'Bitget', 'MEXC', 'Gate.io', 'Hyperliquid'];
 
-    this.io = {};
-    coins.forEach(c => doms.concat(fxs).forEach(ex => {
-      const R3 = rng(hashSeed('io|' + c[0] + '|' + ex));
-      const a = R3(), b = R3();
-      this.io[c[0] + '|' + ex] = {
-        dep: a > 0.13, wd: b > 0.16,
-        net: c[0] === 'USDT' || c[0] === 'USDC' ? (a > 0.5 ? 'TRC20' : 'ERC20')
-          : c[0] === 'ETH' ? (a > 0.55 ? 'ERC20' : 'Arbitrum')
-          : c[0] === 'LINK' || c[0] === 'AAVE' || c[0] === 'UNI' ? 'ERC20'
-          : c[0] === 'BTC' ? 'BTC' : c[0] === 'SOL' ? 'SOL' : c[0] === 'XRP' ? 'XRP'
-          : c[0] === 'TRX' ? 'TRC20' : c[0] === 'MATIC' ? 'Polygon' : c[0] === 'AVAX' ? 'C-Chain' : c[0],
-      };
-    }));
+    // 입출금(io)은 더 이상 mock 을 만들지 않는다 — applySpreads 가 백엔드
+    // 응답에서 채운다. mock 은 24개 코인만 만들었는데 백엔드는 300개 가까이
+    // 주므로, 없는 키가 전부 "중단"으로 그려지고 있었다.
 
     this.gapd = coins.map((c, ci) => {
       const R2 = rng(hashSeed('gap|' + c[0]));
@@ -104,6 +93,18 @@ export class MockFeed {
   applySpreads(rows: SpreadRow[], rate: number) {
     this.spreads = rows;
     this.rate = rate;
+
+    // 한 행은 (국내 × 해외) 페어라 입출금이 양쪽 것 다 실려 온다 — 거래소별로
+    // 풀어 담는다. 같은 코인의 같은 거래소는 어느 행에서 오든 같은 값이다.
+    //
+    // 네트워크명(net)은 백엔드가 주지 않는다. 지어내지 않고 '–' 로 둔다 —
+    // 없는 값을 그럴듯하게 채우는 것이 애초에 이 화면을 틀리게 만든 원인이다.
+    const io: Record<string, IoInfo> = {};
+    for (const r of rows) {
+      io[r.sym + '|' + r.dom] = { dep: r.depDom, wd: r.wdDom, net: '–' };
+      io[r.sym + '|' + r.fx] = { dep: r.depFx, wd: r.wdFx, net: '–' };
+    }
+    this.io = io;
   }
 
   // 1.5초마다 호출 — 아직 mock 인 탭들의 값을 흔들고, 스프레드는 경과시간만 쌓는다.

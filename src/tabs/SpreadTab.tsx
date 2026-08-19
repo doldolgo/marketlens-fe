@@ -1,7 +1,7 @@
 // 실시간 스프레드 탭 — 코인별 최적 김프/역프 페어 + 입출금 가능 여부
 import { useState } from 'react';
 import type { MockFeed } from '../data/mockFeed';
-import type { SpreadRow } from '../data/types';
+import type { IoState, SpreadRow } from '../data/types';
 import { HIGHLIGHT_THRESHOLD, STALE_SECONDS, pctColor } from '../config';
 import { fmtKRW, fmtPct } from '../lib/format';
 import { Seg, segOpt, NumField, ToggleBtn } from '../components/ui';
@@ -73,21 +73,35 @@ export default function SpreadTab({ feed, onPivot }: { feed: MockFeed; onPivot: 
     if (!b) return null;
     const wdEx = view === 'kimp' ? b.fx : b.dom;
     const depEx = view === 'kimp' ? b.dom : b.fx;
-    const wi = feed.io[c.sym + '|' + wdEx] ?? {}, di = feed.io[c.sym + '|' + depEx] ?? {};
-    return { wdEx, depEx, wd: !!(wi as { wd?: boolean }).wd, dep: !!(di as { dep?: boolean }).dep, net: (wi as { net?: string }).net || (di as { net?: string }).net || '–' };
+    const wi = feed.io[c.sym + '|' + wdEx], di = feed.io[c.sym + '|' + depEx];
+    // 값이 없으면 **확인 불가**(null)다. 예전엔 !! 로 접어 false(막힘)로
+    // 만들었는데, 그래서 백엔드가 아는 코인까지 전부 "중단"으로 보였다.
+    return { wdEx, depEx, wd: wi?.wd ?? null, dep: di?.dep ?? null, net: wi?.net || di?.net || '–' };
   };
-  const ioOk = (c: Agg) => { const l = ioLegs(c); return !!l && l.wd && l.dep; };
+  // "옮길 수 있다"고 말하려면 양쪽 다 **확인된** 열림이어야 한다.
+  // null(확인 불가)은 열림이 아니다 — 여기서 접으면 안 된다.
+  const ioOk = (c: Agg) => { const l = ioLegs(c); return !!l && l.wd === true && l.dep === true; };
+  // 막힌 건 아니지만 확인도 못 한 상태 (표시를 다르게 하려고 구분한다)
+  const ioUnknown = (c: Agg) => {
+    const l = ioLegs(c);
+    return !!l && l.wd !== false && l.dep !== false && (l.wd === null || l.dep === null);
+  };
 
   let list = agg.filter(c =>
     (q === '' || c.sym.toLowerCase().includes(q.toLowerCase())) &&
     (!onlyHot || (!c.failAll && ((view === 'kimp' ? c.fwd : c.rev) ?? -99) >= thrVal)) &&
+    // "입출금 가능만" 은 옮길 수 있는 것만 보여달라는 뜻이다. 확인 불가는
+    // 옮길 수 있다고 보장하지 못하므로 통과시키지 않는다. 조회 장애로 목록이
+    // 비면 그것 자체가 신호이고, 필터를 끄면 전체가 그대로 보인다.
     (!onlyIO || ioOk(c)));
   const key = sortKey === 'fwd' || sortKey === 'rev' ? (view === 'kimp' ? 'fwd' : 'rev') : sortKey;
   list = list.slice().sort((a, b) => {
     if (a.failAll !== b.failAll) return a.failAll ? 1 : -1;
     let va: unknown = a[key as keyof Agg], vb: unknown = b[key as keyof Agg];
     if (key === 'krw') { va = a.usd; vb = b.usd; }
-    if (key === 'io') { va = ioOk(a) ? 1 : 0; vb = ioOk(b) ? 1 : 0; }
+    // 가능(2) > 확인 불가(1) > 중단(0) — 세 상태를 정렬에서도 구분한다
+    const ioRank = (c: Agg) => (ioOk(c) ? 2 : ioUnknown(c) ? 1 : 0);
+    if (key === 'io') { va = ioRank(a); vb = ioRank(b); }
     if (va == null || vb == null) return va == null ? 1 : -1;
     if (typeof va === 'string') return va < (vb as string) ? -sortDir : va > (vb as string) ? sortDir : 0;
     return ((va as number) - (vb as number)) * sortDir;
@@ -104,11 +118,20 @@ export default function SpreadTab({ feed, onPivot }: { feed: MockFeed; onPivot: 
 
   const fxAllOn = FXS.every(fx => !fxOff[fx]);
   const okC = 'var(--color-accent-300)', badC = 'var(--color-neutral-600)';
-  const tagStyle = (on: boolean) => ({
+  const unkC = 'var(--color-neutral-500)';
+  // 세 상태를 세 모양으로 그린다. **확인 불가를 초록(열림)으로 칠하지 않는다**
+  // — 확인 못 한 경로를 옮길 수 있다고 말하는 셈이다. 그렇다고 "중단"과 같게
+  // 그리면 반대로 멀쩡한 코인을 막혔다고 말하게 된다.
+  const tagStyle = (state: IoState) => ({
     fontSize: 10, padding: '2px 6px', borderRadius: 'var(--radius-sm)', whiteSpace: 'nowrap' as const,
-    border: `1px solid ${on ? 'var(--color-accent-800)' : 'var(--color-neutral-800)'}`,
-    color: on ? okC : badC,
+    border: state === null
+      ? '1px dashed var(--color-neutral-800)'
+      : `1px solid ${state ? 'var(--color-accent-800)' : 'var(--color-neutral-800)'}`,
+    color: state === null ? unkC : state ? okC : badC,
   });
+  // 확인 불가는 '?' 로 — "가능/중단" 어느 쪽으로도 읽히면 안 된다
+  const ioLabel = (kind: string, state: IoState) =>
+    state === null ? `${kind} ?` : state ? `${kind} 가능` : `${kind} 중단`;
   const exTag = {
     fontSize: 10, letterSpacing: '0.04em', padding: '2px 7px', border: '1px solid var(--color-neutral-800)',
     borderRadius: 'var(--radius-sm)', color: 'var(--color-neutral-400)', background: 'var(--color-surface)', whiteSpace: 'nowrap' as const,
@@ -217,8 +240,8 @@ export default function SpreadTab({ feed, onPivot }: { feed: MockFeed; onPivot: 
                   </span>
                 </div>
                 <div style={{ padding: '0 8px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 5 }}>
-                  <span style={tagStyle(!!leg?.wd)}>{leg ? (leg.wd ? '출금 가능' : '출금 중단') : '출금 –'}</span>
-                  <span style={tagStyle(!!leg?.dep)}>{leg ? (leg.dep ? '입금 가능' : '입금 중단') : '입금 –'}</span>
+                  <span style={tagStyle(leg ? leg.wd : null)}>{leg ? ioLabel('출금', leg.wd) : '출금 ?'}</span>
+                  <span style={tagStyle(leg ? leg.dep : null)}>{leg ? ioLabel('입금', leg.dep) : '입금 ?'}</span>
                   <span style={{ fontSize: 10, color: 'var(--color-neutral-500)', whiteSpace: 'nowrap' }}>{leg ? leg.net : '–'}</span>
                 </div>
               </div>
