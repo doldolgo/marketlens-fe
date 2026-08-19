@@ -1,5 +1,6 @@
 // ⚠️ 시현용 mock 데이터 생성기 — 시안 로직 그대로 포팅.
-// 백엔드 연동 시 이 파일(과 useFeed의 tick 시뮬레이션)만 실데이터 소스로 교체하면 된다.
+// **스프레드(spreads/rate)는 더 이상 여기서 만들지 않는다** — 백엔드 GET /spreads 가 유일한 출처.
+// 나머지 탭(입출금·갭·플로우·기록·상태)은 아직 mock 이며, 연동 시 여기만 교체하면 된다.
 // 화면 쪽은 types.ts의 형태만 알고 있으므로 여기 외에는 손댈 곳이 없어야 함.
 import { rng, hashSeed } from '../lib/rng';
 import type {
@@ -8,9 +9,9 @@ import type {
 } from './types';
 
 export class MockFeed {
-  rate = 1392.4;          // USDT/KRW 암묵환율
-  rateOfficial = 1383.6;  // 고시환율
-  liveSpreads = false;    // true = spreads/rate 가 백엔드 실데이터 (tick 시뮬레이션 제외)
+  // 환율·스프레드는 백엔드 GET /spreads 가 유일한 출처다. 첫 폴링 전에는 비어 있다.
+  rate = 0;               // USDT/KRW 암묵환율 (0 = 아직 못 받음)
+  rateOfficial = 1383.6;  // ⚠️ 고시환율 — 아직 mock (백엔드 미연동)
   spreads: SpreadRow[] = [];
   io: Record<string, IoInfo> = {};
   gapd: GapCoin[] = [];
@@ -25,29 +26,11 @@ export class MockFeed {
   }
 
   private buildData() {
-    const R = rng(20260717);
+    // 스프레드는 mock 을 만들지 않는다 — 백엔드 GET /spreads 폴링이 유일한 출처다.
+    // (아래 coins / doms / fxs 는 아직 mock 인 다른 탭에서 쓴다)
     const coins: [string, number][] = [['BTC',118420],['ETH',4123],['XRP',2.91],['SOL',182.4],['DOGE',0.2134],['ADA',0.887],['TRX',0.302],['LINK',24.6],['AVAX',41.2],['DOT',8.42],['SUI',4.05],['APT',10.8],['ARB',1.12],['OP',2.31],['SEI',0.512],['ATOM',9.14],['NEAR',6.72],['HBAR',0.246],['ETC',31.5],['STX',2.04],['ONDO',1.42],['PEPE',0.0000162],['WLD',3.86],['TIA',6.18]];
     const doms = ['업비트', '빗썸'];
     const fxs = ['Binance', 'Bybit', 'Bitget', 'MEXC', 'Gate.io', 'Hyperliquid'];
-    const rows: SpreadRow[] = [];
-    coins.forEach((c, ci) => {
-      const domList = ci % 5 === 4 ? ['업비트'] : doms;
-      const fxList = fxs.filter((_f, fi) => (ci + fi) % 2 === 0 || fi < 2);
-      domList.forEach(dom => fxList.forEach(fx => {
-        const base = (R() * 2.6 - 0.4) + (c[0] === 'BTC' ? 0.9 : 0);
-        const fwd = Math.round(base * 100) / 100;
-        const rev = Math.round((-fwd - 0.35 + (R() - 0.5) * 0.3) * 100) / 100;
-        const usd = c[1] * (1 + (R() - 0.5) * 0.002);
-        const roll = R();
-        const status: FeedStatus = roll < 0.03 ? 'fail' : roll < 0.09 ? 'stale' : 'ok';
-        const spark: number[] = []; let v = 1;
-        for (let i = 0; i < 28; i++) { v += (R() - 0.5) * 0.06; spark.push(v); }
-        const liqBase = c[0] === 'BTC' || c[0] === 'ETH' ? 4.0e8 : 1.2e7 + R() * 1.1e8;
-        rows.push({ sym: c[0], dom, fx, fwd, rev, usd, spark, status, age: status === 'stale' ? 45 + R() * 300 : R() * 8,
-          liqDom: liqBase * (0.35 + R() * 0.5), liqFx: liqBase * (0.8 + R() * 0.9) });
-      }));
-    });
-    this.spreads = rows;
 
     this.io = {};
     coins.forEach(c => doms.concat(fxs).forEach(ex => {
@@ -117,32 +100,17 @@ export class MockFeed {
     this.flow = rows;
   }
 
-  // GET /spreads 폴링 성공 시 호출 — 이후 spreads/rate 는 백엔드가 진실
+  // GET /spreads 폴링 성공 시 호출 — spreads/rate 의 유일한 출처
   applySpreads(rows: SpreadRow[], rate: number) {
     this.spreads = rows;
     this.rate = rate;
-    this.liveSpreads = true;
   }
 
-  // 1.5초마다 호출 — 실시간 수신을 흉내내 일부 값만 랜덤 갱신
+  // 1.5초마다 호출 — 아직 mock 인 탭들의 값을 흔들고, 스프레드는 경과시간만 쌓는다.
   tick() {
-    if (this.liveSpreads) {
-      // 실데이터 모드 — 값은 폴링이 갱신하고 여기선 경과시간만 쌓는다.
-      // 백엔드가 죽으면 age 가 계속 자라 STALE_SECONDS 를 넘겨 stale 로 드러난다.
-      for (const r of this.spreads) r.age += 1.5;
-    } else {
-      this.rate += (Math.random() - 0.5) * 0.4;
-      for (const r of this.spreads) {
-        if (r.status === 'fail') continue;
-        if (r.status !== 'stale' && Math.random() < 0.25) {
-          r.fwd = Math.round((r.fwd + (Math.random() - 0.5) * 0.12) * 100) / 100;
-          r.rev = Math.round((-r.fwd - 0.35 + (Math.random() - 0.5) * 0.2) * 100) / 100;
-          r.usd *= 1 + (Math.random() - 0.5) * 0.001;
-          r.age = 0;
-          if (Math.random() < 0.4) { r.spark.push(r.spark[r.spark.length - 1] + (Math.random() - 0.5) * 0.05); r.spark.shift(); }
-        } else r.age += 1.5;
-      }
-    }
+    // 스프레드 값은 폴링이 갱신한다. 백엔드가 죽으면 age 가 계속 자라
+    // STALE_SECONDS 를 넘겨 stale 로 드러난다.
+    for (const r of this.spreads) r.age += 1.5;
     for (const g of this.gapd) for (const x of [...g.spots, ...g.perps]) {
       if (x.status === 'fail') continue;
       if (x.status !== 'stale' && Math.random() < 0.25) {
@@ -158,7 +126,10 @@ export class MockFeed {
   events(per: '1주' | '1달' | '3달', now: number): HistEvent[] {
     const ck = per + '|v2';
     if (this.evCache[ck]) return this.evCache[ck];
+    // 종목 목록을 스프레드에서 가져오므로, 첫 폴링 전에는 캐시하지 않는다
+    // (빈 배열도 truthy 라 그대로 캐시하면 영영 안 채워진다).
     const syms = [...new Set(this.spreads.map(r => r.sym))];
+    if (!syms.length) return [];
     const spanMs = { '1주': 6048e5, '1달': 2592e6, '3달': 7776e6 }[per];
     const baseN = { '1주': 7, '1달': 22, '3달': 55 }[per];
     const out: HistEvent[] = [];
